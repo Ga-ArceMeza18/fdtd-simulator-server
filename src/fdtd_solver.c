@@ -204,7 +204,6 @@ static void *ejecutar_hilo(void *arg) {
         // Fuente Ricker: solo la aplica el hilo propietario de la fila sx, exactamente una vez por paso.
         if (fdtd->sx >= inicio && fdtd->sx < fin) {
             size_t fuente;
-// Alterna entre 0 y 1
             fuente = index_ez(fdtd, fdtd->sx, fdtd->sy);
             fdtd->ez[fuente] += ricker(q);
         }
