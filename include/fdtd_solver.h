@@ -2,6 +2,7 @@
 #define FDTD_H
 
 #include <stddef.h>
+#include "barrier.h"
 
 // Campo Eletromagnético
 
@@ -26,6 +27,8 @@ struct FDTD {
     double *ez;
     double *hx;
     double *hy;
+    
+    barrier_t barrier;
 };
 
 
