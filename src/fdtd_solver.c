@@ -194,8 +194,8 @@ static void *ejecutar_hilo(void *arg) {
         actualizar_hy(fdtd, inicio, fin);
 
         // PENDIENTE 1: BARRERA REUTILIZABLE.
-
         // Debe ir aquí, después de actualizar Hx y Hy, antes de comenzar la fase B.
+        barrier_wait(&fdtd->barrier);
 
         // FASE B: campo eléctrico interior.
         repartir_filas(1, fdtd->nx - 1, tid, fdtd->num_threads, &inicio, &fin);
@@ -204,14 +204,14 @@ static void *ejecutar_hilo(void *arg) {
         // Fuente Ricker: solo la aplica el hilo propietario de la fila sx, exactamente una vez por paso.
         if (fdtd->sx >= inicio && fdtd->sx < fin) {
             size_t fuente;
-
+// Alterna entre 0 y 1
             fuente = index_ez(fdtd, fdtd->sx, fdtd->sy);
             fdtd->ez[fuente] += ricker(q);
         }
 
         // PENDIENTE 2: BARRERA REUTILIZABLE.
-        //
         // Debe ir aquí, después de actualizar Ez y aplicar la fuente, antes de comenzar el siguiente paso temporal.
+        barrier_wait(&fdtd->barrier);
     }
 
     return NULL;
@@ -275,6 +275,12 @@ int fdtd_init(struct FDTD *fdtd, size_t nx, size_t ny, size_t steps,
     fdtd->num_threads = num_threads;
     fdtd->sx = sx;
     fdtd->sy = sy;
+
+    // Inicializar la barrera reutilizable
+    if (barrier_init(&fdtd->barrier, num_threads) != 0) {
+        fdtd_destroy(fdtd);
+        return -1;
+    }
 
     return 0;
 }
@@ -395,6 +401,9 @@ void fdtd_destroy(struct FDTD *fdtd) {
     if (fdtd == NULL) {
         return;
     }
+
+    // Destruir la barrera reutilizable
+    barrier_destroy(&fdtd->barrier);
 
     free(fdtd->ez);
     free(fdtd->hx);
