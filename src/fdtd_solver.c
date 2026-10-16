@@ -281,6 +281,8 @@ int fdtd_init(struct FDTD *fdtd, size_t nx, size_t ny, size_t steps,
         return -1;
     }
 
+    fdtd->barrier_initialized = 1; // Indicar que la barrera ha sido inicializada correctamente.
+
     return 0;
 }
 
@@ -296,9 +298,6 @@ int fdtd_run(struct FDTD *fdtd) {
     int error;
     
     struct StartGate start_gate;
-    datos[i].fdtd = fdtd;
-    datos[i].start_gate = &start_gate;
-    datos[i].tid = i;
 
     if (fdtd == NULL || fdtd->ez == NULL || fdtd->hx == NULL ||
         fdtd->hy == NULL) {
@@ -341,6 +340,7 @@ int fdtd_run(struct FDTD *fdtd) {
 
     for (i = 0; i < fdtd->num_threads; i++) {
         datos[i].fdtd = fdtd;
+        datos[i].start_gate = &start_gate;
         datos[i].tid = i;
 
         if (pthread_create(&threads[i], NULL, ejecutar_hilo, &datos[i]) != 0) {
@@ -402,7 +402,10 @@ void fdtd_destroy(struct FDTD *fdtd) {
     }
 
     // Destruir la barrera reutilizable
-    barrier_destroy(&fdtd->barrier);
+    if (fdtd->barrier_initialized) {
+        barrier_destroy(&fdtd->barrier);
+        fdtd->barrier_initialized = 0; // Indicar que la barrera ya no está inicializada.
+    }
 
     free(fdtd->ez);
     free(fdtd->hx);

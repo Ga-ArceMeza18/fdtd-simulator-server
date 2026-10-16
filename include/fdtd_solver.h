@@ -29,6 +29,7 @@ struct FDTD {
     double *hy;
     
     barrier_t barrier;
+    int barrier_initialized; // Indica si la barrera ha sido inicializada correctamente.
 };
 
 
