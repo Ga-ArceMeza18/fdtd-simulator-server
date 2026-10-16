@@ -2,7 +2,7 @@
 // Created by Sleyter Angulo on 9/17/26.
 //
 
-#include "../includes/net_util.h"
+#include "../include/net_util.h"
 #include <pthread.h>
 #include <semaphore.h> // se añade para usar los semáforos
 #include <netinet/in.h>
