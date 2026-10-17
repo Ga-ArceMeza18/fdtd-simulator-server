@@ -1,6 +1,7 @@
 
 #include "status.h"
 
+#include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdint.h>
@@ -26,10 +27,13 @@ struct Status {
 
 // Reintenta sem_wait si una señal interrumpe la llamada.
 static int retry_sem_wait(sem_t *sem) {
-    if (sem_wait(sem) == -1) {
-        return -1;
-    }
-    return 0;
+    int result;
+
+    do {
+        result = sem_wait(sem);
+    } while (result == -1 && errno == EINTR); // Reintenta si la llamada fue interrumpida por una señal.
+    
+    return result;
 }
 
 // Entra como lector. Varios lectores pueden consultar simultáneamente.
@@ -248,21 +252,22 @@ int status_init(Status **status, size_t nx, size_t ny) {
 }
 
 int status_publish(Status *status, size_t step, const double *ez) {
+    size_t size;
 
     // Revisa si los punteros son nulos
     if (status == NULL || ez == NULL) {
         return -1;
     }
+    
+    size = status->nx * status->ny; // Calcula la cantidad de elementos en el arreglo Ez
 
-    // Revisa si el paso es menor que el paso publicado actual
-    if (writer_entry(status) == -1) {
+    // Revisa si la cantidad es cero o mayor que el tamaño máximo permitido, lo que indicaría un error en las dimensiones de la simulación
+    if (size == 0 || size > SIZE_MAX / sizeof(double)) {
         return -1;
     }
 
-    size_t size = status->nx * status->ny; // Calcula la cantidad de elementos en el arreglo Ez
-
-    // Revisa si la cantidad es cero, lo que indicaría un error en las dimensiones de la simulación
-    if (size == 0) {
+    // Revisa si el paso es menor que el paso publicado actual
+    if (writer_entry(status) != 0) {
         return -1;
     }
 
@@ -286,7 +291,7 @@ int status_consult(Status *status, size_t *step,
     }
 
     // Revisa si se puede entrar como lector. Si no, retorna un error.
-    if (reader_entry(status) == -1) {
+    if (reader_entry(status) != 0) {
         return -1;
     }
 
