@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include "barrier.h"
+#include "status.h"
 
 // Campo Eletromagnético
 
@@ -30,6 +31,9 @@ struct FDTD {
     
     barrier_t barrier;
     int barrier_initialized; // Indica si la barrera ha sido inicializada correctamente.
+
+    Status *status;
+    int status_error; // Indica si hubo un error al inicializar el Status.
 };
 
 
@@ -37,6 +41,9 @@ struct FDTD {
 // Retorna 0 si la inicialización fue exitosa, -1 si hubo un error.
 int fdtd_init(struct FDTD *fdtd, size_t nx, size_t ny, size_t steps,
     size_t num_threads, size_t sx, size_t sy);
+
+// Establecer el objeto Status para la simulación FDTD.
+int fdtd_set_status(struct FDTD *fdtd, Status *status);
     
 // Ejecutar la simulación FDTD.
 // Pendiente: agregar la barrera reutilizable

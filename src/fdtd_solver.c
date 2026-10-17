@@ -1,4 +1,5 @@
 #include "fdtd_solver.h"
+#include "status.h"
 
 #include <math.h>
 #include <pthread.h>
@@ -210,7 +211,16 @@ static void *ejecutar_hilo(void *arg) {
 
         // PENDIENTE 2: BARRERA REUTILIZABLE.
         // Debe ir aquí, después de actualizar Ez y aplicar la fuente, antes de comenzar el siguiente paso temporal.
-        barrier_wait(&fdtd->barrier);
+        #ifndef SIN_BARRERA
+            barrier_wait(&fdtd->barrier);
+        #endif
+
+        // Publicar el campo Ez solo cuando todos terminaron de actualizar Ez y aplicar la fuente Ricker
+        if (tid == 0 && fdtd->status != NULL) {
+            if (status_publish(fdtd->status, q + 1, fdtd->ez) != 0) {
+                fdtd->status_error = 1; // Indicar que hubo un error al publicar el estado.
+            }
+        }
     }
 
     return NULL;
@@ -286,6 +296,17 @@ int fdtd_init(struct FDTD *fdtd, size_t nx, size_t ny, size_t steps,
     return 0;
 }
 
+int fdtd_set_status(struct FDTD *fdtd, Status *status) {
+    if (fdtd == NULL || status == NULL) {
+        return -1;
+    }
+
+    fdtd->status = status;
+    fdtd->status_error = 0; // Indicar que no hubo error al establecer el Status.
+
+    return 0;
+}
+
 // Ejecutar la simulación FDTD.
 // En general lo que hace es crear los hilos, esperar a que todos estén listos y luego iniciar la simulación. 
 
@@ -298,6 +319,8 @@ int fdtd_run(struct FDTD *fdtd) {
     int error;
     
     struct StartGate start_gate;
+
+    fdtd->status_error = 0;
 
     if (fdtd == NULL || fdtd->ez == NULL || fdtd->hx == NULL ||
         fdtd->hy == NULL) {
@@ -366,6 +389,10 @@ int fdtd_run(struct FDTD *fdtd) {
         if (pthread_join(threads[i], NULL) != 0) {
             error = -1;
         }
+    }
+
+    if (fdtd->status_error) {
+        error = -1;
     }
 
     pthread_cond_destroy(&start_gate.cond);
