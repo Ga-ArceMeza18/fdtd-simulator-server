@@ -1,7 +1,6 @@
 #ifndef TEST_UTIL_H
 #define TEST_UTIL_H
 
-// Utilidades mínimas para las pruebas. Cada .c debe definir
 // _POSIX_C_SOURCE 200809L antes de incluir cualquier encabezado.
 
 #include <stdio.h>

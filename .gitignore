@@ -1,18 +1,31 @@
-bin/
+# Compilación
 build/
-doc/
-lib/
-html/
-latex/
-*.pyc
-.DS_Store
-.vscode/
-*.out
-*.zip
+build_sb/
+fdtd_server
+fdtd_client
+fdtd_bench
+fdtd_server_sb
+fdtd_bench_sb
 *.o
+*.d
 
-*.aux
-*.log
-*.fdb_latexmk
-*.fls
-*.synctex.gz
+# Instantáneas generadas por el servidor y por pruebas
+snapshots/
+*.bin
+*.tmp
+
+# LaTeX (se versiona informe.tex y informe.pdf, no los auxiliares)
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.synctex.gz
+
+# Python
+__pycache__/
+*.pyc
+
+# Editores / sistema
+.vscode/
+.idea/
+.DS_Store

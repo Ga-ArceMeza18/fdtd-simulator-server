@@ -142,15 +142,13 @@ int main(void) {
         free(ez);
     }
 
-    // 2) Caso pequeño de referencia (8x8, 5 pasos) y uno mayor contra la
-    //    implementación serial independiente, con distintos números de hilos.
     compare_with_reference(8, 8, 5, 1);
     compare_with_reference(8, 8, 5, 6);
     compare_with_reference(21, 17, 60, 1);
     compare_with_reference(21, 17, 60, 3);
     compare_with_reference(21, 17, 60, 5);
 
-    // 3) Simetría: malla cuadrada impar y fuente centrada
+
     for (t = 1; t <= 4; t += 3) {
         const size_t N = 41;
         double maxabs = 0.0, asym = 0.0;
@@ -182,7 +180,6 @@ int main(void) {
         free(ez);
     }
 
-    // 4) Bordes PEC: Ez es exactamente cero en todo el contorno (la onda ya llegó)
     for (t = 1; t <= 5; t += 2) {
         const size_t NX = 30, NY = 47;
 
@@ -201,7 +198,7 @@ int main(void) {
             for (n = 0; n < NY; n++) {
                 if (ez[n] != 0.0 || ez[(NX - 1) * NY + n] != 0.0) border_zero = 0;
             }
-            // La onda sí llegó cerca del borde (la prueba no es trivial)
+            // La onda sí llegó cerca del borde
             for (n = 0; n < NY; n++) {
                 interior_edge += fabs(ez[1 * NY + n]) + fabs(ez[(NX - 2) * NY + n]);
             }

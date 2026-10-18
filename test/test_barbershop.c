@@ -169,7 +169,7 @@ int main(void) {
     }
     barbershop_destroy(shop);
 
-    // ---- Apagado con trabajo en ejecución y trabajos en cola
+    //  Apagado con trabajo en ejecución y trabajos en cola
     CHECK(barbershop_init(&shop, C) == 0);
     CHECK(barbershop_submit(shop, &lp, &ids[0]) == BARBERSHOP_OK);
     CHECK(wait_state(shop, ids[0], JOB_RUNNING, 10.0));
