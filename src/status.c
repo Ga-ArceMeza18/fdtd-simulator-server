@@ -1,4 +1,3 @@
-
 #include "status.h"
 
 #include <errno.h>
@@ -12,6 +11,7 @@ struct Status {
     size_t nx;
     size_t ny;
     size_t step_published;
+    size_t step_current; 
     double *ez_published;
 
     // Candado lectores-escritor con prioridad para escritores.
@@ -275,6 +275,28 @@ int status_publish(Status *status, size_t step, const double *ez) {
     status->step_published = step; // Actualiza el paso publicado en el estado
 
     return writer_exit(status);
+}
+
+int status_set_step(Status *status, size_t step) {
+    if (status == NULL) {
+        return -1;
+    }
+    if (writer_entry(status) != 0) {
+        return -1;
+    }
+    status->step_current = step;
+    return writer_exit(status);
+}
+
+int status_get_step(Status *status, size_t *step) {
+    if (status == NULL || step == NULL) {
+        return -1;
+    }
+    if (reader_entry(status) != 0) {
+        return -1;
+    }
+    *step = status->step_current;
+    return reader_exit(status);
 }
 
 int status_consult(Status *status, size_t *step,

@@ -25,6 +25,11 @@ int status_publish(Status *status, size_t step, const double *ez);
 
 int status_consult(Status *status, size_t *step, size_t i, size_t j, double *ez_value);
 
+// Progreso de la simulación (paso actual). Es barato: no copia Ez. Lo escribe
+// el hilo 0 en cada paso y lo lee STATUS; usa el mismo candado lectores-escritor.
+int status_set_step(Status *status, size_t step);
+int status_get_step(Status *status, size_t *step);
+
 // Libera los recursos asociados con el objeto Status
 
 void status_destroy(Status *status);

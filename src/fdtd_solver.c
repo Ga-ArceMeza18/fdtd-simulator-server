@@ -1,15 +1,19 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "fdtd_solver.h"
 #include "status.h"
+  
 
 #include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define PI 3.14159265358979323846
 #define SC 0.70710678118654752440
-#define IMPEDANCIA_VACÍO 376.730313668
+#define IMPEDANCIA_VACIO 376.730313668
 #define EPSILON_R 1.0
 #define PPW 20.0
 
@@ -67,6 +71,27 @@ static void repartir_filas(size_t inicio, size_t fin, size_t tid,
     }
 }
 
+static double ahora(void) {
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
+#ifndef SIN_BARRERA
+// Espera en la barrera; con el perfilado activo acumula el tiempo esperado.
+static void esperar_barrera(struct FDTD *fdtd, size_t tid) {
+    if (fdtd->profile) {
+        double t0 = ahora();
+
+        barrier_wait(&fdtd->barrier);
+        fdtd->t_barrier[tid] += ahora() - t0;
+    } else {
+        barrier_wait(&fdtd->barrier);
+    }
+}
+#endif
+
 // Función de fuente suave de Ricker.
 static double ricker(size_t q) {
     double arg;
@@ -84,7 +109,7 @@ static void actualizar_hx(struct FDTD *fdtd, size_t inicio, size_t fin) {
     size_t n;
     double factor;
 
-    factor = SC / IMPEDANCIA_VACÍO;
+    factor = SC / IMPEDANCIA_VACIO;
 
     for (m = inicio; m < fin; m++) {
         for (n = 0; n < fdtd->ny - 1; n++) {
@@ -107,7 +132,7 @@ static void actualizar_hy(struct FDTD *fdtd, size_t inicio, size_t fin) {
     size_t n;
     double factor;
 
-    factor = SC / IMPEDANCIA_VACÍO;
+    factor = SC / IMPEDANCIA_VACIO;
 
     for (m = inicio; m < fin; m++) {
         for (n = 0; n < fdtd->ny; n++) {
@@ -130,7 +155,7 @@ static void actualizar_ez(struct FDTD *fdtd, size_t inicio, size_t fin) {
     size_t n;
     double factor;
 
-    factor = SC * IMPEDANCIA_VACÍO / EPSILON_R;
+    factor = SC * IMPEDANCIA_VACIO / EPSILON_R;
 
     for (m = inicio; m < fin; m++) {
         for (n = 1; n < fdtd->ny - 1; n++) {
@@ -194,9 +219,9 @@ static void *ejecutar_hilo(void *arg) {
         repartir_filas(0, fdtd->nx - 1, tid, fdtd->num_threads, &inicio, &fin);
         actualizar_hy(fdtd, inicio, fin);
 
-        // PENDIENTE 1: BARRERA REUTILIZABLE.
-        // Debe ir aquí, después de actualizar Hx y Hy, antes de comenzar la fase B.
-        barrier_wait(&fdtd->barrier);
+        #ifndef SIN_BARRERA
+            esperar_barrera(fdtd, tid);
+        #endif
 
         // FASE B: campo eléctrico interior.
         repartir_filas(1, fdtd->nx - 1, tid, fdtd->num_threads, &inicio, &fin);
@@ -209,16 +234,43 @@ static void *ejecutar_hilo(void *arg) {
             fdtd->ez[fuente] += ricker(q);
         }
 
-        // PENDIENTE 2: BARRERA REUTILIZABLE.
-        // Debe ir aquí, después de actualizar Ez y aplicar la fuente, antes de comenzar el siguiente paso temporal.
+    
         #ifndef SIN_BARRERA
-            barrier_wait(&fdtd->barrier);
+            esperar_barrera(fdtd, tid);
         #endif
 
-        // Publicar el campo Ez solo cuando todos terminaron de actualizar Ez y aplicar la fuente Ricker
-        if (tid == 0 && fdtd->status != NULL) {
-            if (status_publish(fdtd->status, q + 1, fdtd->ez) != 0) {
-                fdtd->status_error = 1; // Indicar que hubo un error al publicar el estado.
+        // Solo el hilo 0 publica, y lo hace cuando todos terminaron de actualizar
+        // Ez y de aplicar la fuente. Los demás ya pueden empezar la fase A del
+        // paso siguiente porque esa fase solo LEE Ez.
+        if (tid == 0) {
+            int ultimo = (q + 1 == fdtd->steps);
+            double t_io0 = fdtd->profile ? ahora() : 0.0;
+
+            if (fdtd->status != NULL) {
+                // Progreso: barato, en cada paso.
+                if (status_set_step(fdtd->status, q + 1) != 0) {
+                    fdtd->status_error = 1;
+                }
+                // Instantánea publicada (copia de Ez): cada K pasos y al final.
+                if ((fdtd->snapshot_every > 0
+                        && (q + 1) % fdtd->snapshot_every == 0) || ultimo) {
+                    if (status_publish(fdtd->status, q + 1, fdtd->ez) != 0) {
+                        fdtd->status_error = 1;
+                    }
+                }
+            }
+
+            // Búfer de instantáneas hacia el hilo escritor.
+            if (fdtd->snapshots != NULL && fdtd->snapshot_every > 0
+                && (q + 1) % fdtd->snapshot_every == 0) {
+                if (snapbuf_push(fdtd->snapshots, fdtd->job_id, fdtd->nx,
+                        fdtd->ny, q + 1, fdtd->ez) != 0) {
+                    fdtd->snapshot_error = 1;
+                }
+            }
+
+            if (fdtd->profile) {
+                fdtd->t_io += ahora() - t_io0;
             }
         }
     }
@@ -272,8 +324,10 @@ int fdtd_init(struct FDTD *fdtd, size_t nx, size_t ny, size_t steps,
     fdtd->ez = calloc(cantidad_ez, sizeof(double));
     fdtd->hx = calloc(cantidad_hx, sizeof(double));
     fdtd->hy = calloc(cantidad_hy, sizeof(double));
+    fdtd->t_barrier = calloc(num_threads, sizeof(double));
 
-    if (fdtd->ez == NULL || fdtd->hx == NULL || fdtd->hy == NULL) {
+    if (fdtd->ez == NULL || fdtd->hx == NULL || fdtd->hy == NULL
+        || fdtd->t_barrier == NULL) {
         fdtd_destroy(fdtd);
         return -1;
     }
@@ -307,6 +361,21 @@ int fdtd_set_status(struct FDTD *fdtd, Status *status) {
     return 0;
 }
 
+int fdtd_set_snapshots(struct FDTD *fdtd, SnapshotBuffer *sb,
+    unsigned long job_id, size_t every) {
+
+    if (fdtd == NULL || (sb == NULL && every > 0)) {
+        return -1;
+    }
+
+    fdtd->snapshots = sb;
+    fdtd->job_id = job_id;
+    fdtd->snapshot_every = every;
+    fdtd->snapshot_error = 0;
+
+    return 0;
+}
+
 // Ejecutar la simulación FDTD.
 // En general lo que hace es crear los hilos, esperar a que todos estén listos y luego iniciar la simulación. 
 
@@ -320,12 +389,15 @@ int fdtd_run(struct FDTD *fdtd) {
     
     struct StartGate start_gate;
 
-    fdtd->status_error = 0;
-
     if (fdtd == NULL || fdtd->ez == NULL || fdtd->hx == NULL ||
         fdtd->hy == NULL) {
         return -1;
     }
+
+    fdtd->status_error = 0;
+    fdtd->snapshot_error = 0;
+    memset(fdtd->t_barrier, 0, fdtd->num_threads * sizeof(double));
+    fdtd->t_io = 0.0;
 
     if (fdtd->num_threads > SIZE_MAX / sizeof(pthread_t) ||
         fdtd->num_threads > SIZE_MAX / sizeof(struct ThreadData)) {
@@ -391,7 +463,7 @@ int fdtd_run(struct FDTD *fdtd) {
         }
     }
 
-    if (fdtd->status_error) {
+    if (fdtd->status_error || fdtd->snapshot_error) {
         error = -1;
     }
 
@@ -402,6 +474,39 @@ int fdtd_run(struct FDTD *fdtd) {
     free(datos);
 
     return error;
+}
+
+void fdtd_set_profile(struct FDTD *fdtd, int on) {
+    if (fdtd != NULL) {
+        fdtd->profile = on;
+    }
+}
+
+void fdtd_profile_times(const struct FDTD *fdtd, double *barrier_mean,
+    double *barrier_max, double *io) {
+
+    double suma = 0.0;
+    double maximo = 0.0;
+    size_t i;
+
+    if (fdtd == NULL || fdtd->t_barrier == NULL) {
+        return;
+    }
+    for (i = 0; i < fdtd->num_threads; i++) {
+        suma += fdtd->t_barrier[i];
+        if (fdtd->t_barrier[i] > maximo) {
+            maximo = fdtd->t_barrier[i];
+        }
+    }
+    if (barrier_mean != NULL) {
+        *barrier_mean = suma / (double)fdtd->num_threads;
+    }
+    if (barrier_max != NULL) {
+        *barrier_max = maximo;
+    }
+    if (io != NULL) {
+        *io = fdtd->t_io;
+    }
 }
 
 double fdtd_sum_ez(const struct FDTD *fdtd) {
@@ -437,6 +542,7 @@ void fdtd_destroy(struct FDTD *fdtd) {
     free(fdtd->ez);
     free(fdtd->hx);
     free(fdtd->hy);
+    free(fdtd->t_barrier);
 
     memset(fdtd, 0, sizeof(*fdtd));
 }

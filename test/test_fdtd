@@ -1,0 +1,254 @@
+#define _POSIX_C_SOURCE 200809L
+
+// Núcleo FDTD: valores calculados a mano, comparación contra una implementación
+// serial independiente, simetría, bordes PEC, hilos inválidos y publicación.
+
+#include "fdtd_solver.h"
+#include "status.h"
+#include "test_util.h"
+
+#include <math.h>
+
+#define PI 3.14159265358979323846
+#define SC 0.70710678118654752440
+#define ETA 376.730313668
+#define PPW 20.0
+
+// ------------------------------------------------- referencia serial (spec)
+static double ricker_ref(size_t q) {
+    double arg = PI * ((SC * (double)q) / PPW - 1.0);
+
+    arg *= arg;
+    return (1.0 - 2.0 * arg) * exp(-arg);
+}
+
+static void ref_run(size_t NX, size_t NY, size_t steps, size_t sx, size_t sy,
+    double *ez, double *hx, double *hy) {
+
+#define EZ(m, n) ez[(m) * NY + (n)]
+#define HX(m, n) hx[(m) * (NY - 1) + (n)]
+#define HY(m, n) hy[(m) * NY + (n)]
+    size_t q, m, n;
+
+    for (q = 0; q < steps; q++) {
+        for (m = 0; m < NX; m++) {
+            for (n = 0; n < NY - 1; n++) {
+                HX(m, n) = HX(m, n) - (SC / ETA) * (EZ(m, n + 1) - EZ(m, n));
+            }
+        }
+        for (m = 0; m < NX - 1; m++) {
+            for (n = 0; n < NY; n++) {
+                HY(m, n) = HY(m, n) + (SC / ETA) * (EZ(m + 1, n) - EZ(m, n));
+            }
+        }
+        for (m = 1; m < NX - 1; m++) {
+            for (n = 1; n < NY - 1; n++) {
+                EZ(m, n) = EZ(m, n) + (SC * ETA / 1.0)
+                    * ((HY(m, n) - HY(m - 1, n)) - (HX(m, n) - HX(m, n - 1)));
+            }
+        }
+        EZ(sx, sy) = EZ(sx, sy) + ricker_ref(q);
+    }
+#undef EZ
+#undef HX
+#undef HY
+}
+
+static double max_diff(const double *a, const double *b, size_t n) {
+    double d = 0.0;
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        double x = fabs(a[i] - b[i]);
+
+        if (x > d) {
+            d = x;
+        }
+    }
+    return d;
+}
+
+// Corre el solucionador y entrega una copia de Ez.
+static double *solve(size_t nx, size_t ny, size_t steps, size_t threads,
+    size_t sx, size_t sy) {
+
+    struct FDTD f;
+    double *ez;
+
+    if (fdtd_init(&f, nx, ny, steps, threads, sx, sy) != 0 || fdtd_run(&f) != 0) {
+        return NULL;
+    }
+    ez = malloc(nx * ny * sizeof(double));
+    memcpy(ez, f.ez, nx * ny * sizeof(double));
+    fdtd_destroy(&f);
+    return ez;
+}
+
+// Compara el solucionador (T hilos) contra la referencia serial.
+static void compare_with_reference(size_t nx, size_t ny, size_t steps, size_t threads) {
+    size_t sx = nx / 2, sy = ny / 2;
+    double *ez = calloc(nx * ny, sizeof(double));
+    double *hx = calloc(nx * (ny - 1), sizeof(double));
+    double *hy = calloc((nx - 1) * ny, sizeof(double));
+    double *got = solve(nx, ny, steps, threads, sx, sy);
+
+    ref_run(nx, ny, steps, sx, sy, ez, hx, hy);
+    CHECK(got != NULL);
+    if (got != NULL) {
+        double d = max_diff(ez, got, nx * ny);
+
+        printf("  %zux%zu, %zu pasos, T=%zu: diferencia maxima vs serial = %.3e\n",
+            nx, ny, steps, threads, d);
+        CHECK(d <= 1e-12);
+    }
+    free(got);
+    free(ez);
+    free(hx);
+    free(hy);
+}
+
+int main(void) {
+    struct FDTD f;
+    double *ez;
+    size_t m, n, t;
+
+    TEST_START("nucleo FDTD");
+
+    // 1) Caso mínimo calculado a mano (malla 3x3, fuente en (1,1)).
+    //    Paso 0: H = 0, Ez[1][1] = ricker(0).
+    //    Paso 1: Hx[1][0] = -k r0, Hx[1][1] = +k r0, Hy[0][1] = +k r0,
+    //            Hy[1][1] = -k r0 (k = Sc/eta0), y como (Sc*eta0)*k = Sc^2 = 1/2:
+    //            Ez[1][1] = r0 - 4*(1/2)*r0 + ricker(1) = ricker(1) - ricker(0).
+    ez = solve(3, 3, 1, 1, 1, 1);
+    CHECK(ez != NULL);
+    if (ez != NULL) {
+        double r0 = (1.0 - 2.0 * PI * PI) * exp(-PI * PI); // ~ -9.69e-4
+        CHECK(fabs(ez[4] - r0) < 1e-15);
+        for (m = 0; m < 9; m++) {
+            if (m != 4) {
+                CHECK(ez[m] == 0.0);
+            }
+        }
+        free(ez);
+    }
+    ez = solve(3, 3, 2, 1, 1, 1);
+    CHECK(ez != NULL);
+    if (ez != NULL) {
+        double a0 = PI * (SC * 0.0 / PPW - 1.0), a1 = PI * (SC * 1.0 / PPW - 1.0);
+        double r0 = (1.0 - 2.0 * a0 * a0) * exp(-a0 * a0);
+        double r1 = (1.0 - 2.0 * a1 * a1) * exp(-a1 * a1);
+
+        CHECK(fabs(ez[4] - (r1 - r0)) < 1e-12);
+        free(ez);
+    }
+
+    // 2) Caso pequeño de referencia (8x8, 5 pasos) y uno mayor contra la
+    //    implementación serial independiente, con distintos números de hilos.
+    compare_with_reference(8, 8, 5, 1);
+    compare_with_reference(8, 8, 5, 6);
+    compare_with_reference(21, 17, 60, 1);
+    compare_with_reference(21, 17, 60, 3);
+    compare_with_reference(21, 17, 60, 5);
+
+    // 3) Simetría: malla cuadrada impar y fuente centrada
+    for (t = 1; t <= 4; t += 3) {
+        const size_t N = 41;
+        double maxabs = 0.0, asym = 0.0;
+
+        ez = solve(N, N, 90, t, N / 2, N / 2);
+        CHECK(ez != NULL);
+        if (ez == NULL) {
+            continue;
+        }
+        for (m = 0; m < N * N; m++) {
+            if (fabs(ez[m]) > maxabs) {
+                maxabs = fabs(ez[m]);
+            }
+        }
+        for (m = 0; m < N; m++) {
+            for (n = 0; n < N; n++) {
+                double a = fabs(ez[m * N + n] - ez[n * N + m]);                 // diagonal
+                double b = fabs(ez[m * N + n] - ez[(N - 1 - m) * N + n]);       // eje x
+                double c = fabs(ez[m * N + n] - ez[m * N + (N - 1 - n)]);       // eje y
+
+                if (a > asym) asym = a;
+                if (b > asym) asym = b;
+                if (c > asym) asym = c;
+            }
+        }
+        printf("  simetria T=%zu: asimetria maxima %.3e (|Ez| max %.3e)\n", t, asym, maxabs);
+        CHECK(maxabs > 0.0);
+        CHECK(asym <= 1e-10 * maxabs);
+        free(ez);
+    }
+
+    // 4) Bordes PEC: Ez es exactamente cero en todo el contorno (la onda ya llegó)
+    for (t = 1; t <= 5; t += 2) {
+        const size_t NX = 30, NY = 47;
+
+        ez = solve(NX, NY, 120, t, NX / 2, NY / 2);
+        CHECK(ez != NULL);
+        if (ez == NULL) {
+            continue;
+        }
+        {
+            int border_zero = 1;
+            double interior_edge = 0.0;
+
+            for (m = 0; m < NX; m++) {
+                if (ez[m * NY] != 0.0 || ez[m * NY + NY - 1] != 0.0) border_zero = 0;
+            }
+            for (n = 0; n < NY; n++) {
+                if (ez[n] != 0.0 || ez[(NX - 1) * NY + n] != 0.0) border_zero = 0;
+            }
+            // La onda sí llegó cerca del borde (la prueba no es trivial)
+            for (n = 0; n < NY; n++) {
+                interior_edge += fabs(ez[1 * NY + n]) + fabs(ez[(NX - 2) * NY + n]);
+            }
+            CHECK(border_zero);
+            CHECK(interior_edge > 0.0);
+        }
+        free(ez);
+    }
+
+    // 5) Hilos y parámetros inválidos se rechazan; el límite nx-2 es válido
+    CHECK(fdtd_init(&f, 10, 10, 5, 0, 5, 5) != 0);
+    CHECK(fdtd_init(&f, 10, 10, 5, 9, 5, 5) != 0);   // 9 > nx-2
+    CHECK(fdtd_init(&f, 2, 10, 5, 1, 1, 5) != 0);
+    CHECK(fdtd_init(&f, 10, 10, 0, 2, 5, 5) != 0);
+    CHECK(fdtd_init(&f, 10, 10, 5, 2, 0, 5) != 0);
+    CHECK(fdtd_init(&f, 10, 10, 5, 2, 9, 5) != 0);   // sx = nx-1
+    CHECK(fdtd_init(&f, 10, 10, 5, 2, 5, 9) != 0);   // sy = ny-1
+    CHECK(fdtd_init(NULL, 10, 10, 5, 2, 5, 5) != 0);
+    {
+        double *a = solve(10, 10, 40, 8, 5, 5);  // T = nx-2, una fila por hilo
+        double *b = solve(10, 10, 40, 1, 5, 5);
+
+        CHECK(a != NULL && b != NULL);
+        if (a != NULL && b != NULL) {
+            CHECK(memcmp(a, b, 100 * sizeof(double)) == 0);
+        }
+        free(a);
+        free(b);
+    }
+
+    // 6) Publicación: al terminar, el estado tiene el último paso y el Ez final
+    {
+        Status *st = NULL;
+        size_t step = 0;
+        double v = 0.0;
+
+        CHECK(status_init(&st, 24, 24) == 0);
+        CHECK(fdtd_init(&f, 24, 24, 50, 3, 12, 12) == 0);
+        fdtd_set_status(&f, st);
+        CHECK(fdtd_run(&f) == 0);
+        CHECK(status_get_step(st, &step) == 0 && step == 50);
+        CHECK(status_consult(st, &step, 12, 12, &v) == 0);
+        CHECK(step == 50);
+        CHECK(v == f.ez[12 * 24 + 12]);
+        fdtd_destroy(&f);
+        status_destroy(st);
+    }
+
+    TEST_END();
+}

@@ -1,38 +1,36 @@
+CC      ?= gcc
+CFLAGS  = -std=c17 -Wall -Wextra -pedantic -O2 -pthread -Iinclude
+LDFLAGS = -pthread
+LDLIBS  = -lm
 
-CC = gcc
-CFLAGS = -std=c17 -Wall -Wextra -pedantic -O2 -pthread
-CPPFLAGS = -Iinclude
-LDLIBS = -lm
+BUILD = build
 
-BUILD_DIR = build
-SRC_DIR = src
+CORE_SRC = src/barrier.c src/status.c src/snapshot_buffer.c \
+           src/fdtd_solver.c src/barbershop.c src/net_util.c
+CORE_OBJ = $(CORE_SRC:src/%.c=$(BUILD)/%.o)
 
-COMMON = $(BUILD_DIR)/barrier.o \
-         $(BUILD_DIR)/fdtd_solver.o \
-         $(BUILD_DIR)/status.o
+.PHONY: all test clean
 
-NET = $(BUILD_DIR)/net_util.o
+all: fdtd_server fdtd_client
 
-.PHONY: all clean sin-barrera
+fdtd_server: $(CORE_OBJ) $(BUILD)/fdtd_server.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-all: $(BUILD_DIR)/fdtd_server $(BUILD_DIR)/load_client
+fdtd_client: $(BUILD)/fdtd_client.o $(BUILD)/net_util.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+$(BUILD)/%.o: src/%.c | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+$(BUILD):
+	mkdir -p $(BUILD)
 
-$(BUILD_DIR)/fdtd_server: $(BUILD_DIR)/server_safe.o $(COMMON) $(NET)
-	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+$(BUILD)/test_snapshot_buffer: tests/test_snapshot_buffer.c src/snapshot_buffer.c | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-$(BUILD_DIR)/load_client: $(BUILD_DIR)/load_client.o $(NET)
-	$(CC) $(CFLAGS) $^ -o $@
-
-sin-barrera:
-	$(MAKE) clean
-	$(MAKE) CFLAGS="$(CFLAGS) -DSIN_BARRERA" all
+test: all $(BUILD)/test_snapshot_buffer
+	$(BUILD)/test_snapshot_buffer
+	bash tests/test_protocol.sh
 
 clean:
-	rm -rf $(BUILD_DIR)
-
+	rm -rf $(BUILD) fdtd_server fdtd_client

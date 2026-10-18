@@ -17,4 +17,6 @@ ssize_t nu_drain_request(int file_descriptor);
 
 int nu_send_response(int file_descriptor, unsigned long connection_id);
 
+ssize_t nu_read_line(int file_descriptor, char *buffer, size_t size);
+
 #endif //MINI_SERVER_NET_UTIL_H

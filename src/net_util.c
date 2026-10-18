@@ -2,7 +2,7 @@
 // Created by Sleyter Angulo on 9/14/26.
 //
 
-#include "../includes/net_util.h"
+#include "../include/net_util.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -17,6 +17,7 @@ int nu_listen(unsigned short port, int backlog)
     if (file_descriptor < 0)
     {
         perror("socket");
+        close(file_descriptor);
         return -1;
     }
 
@@ -24,6 +25,7 @@ int nu_listen(unsigned short port, int backlog)
     if (setsockopt(file_descriptor, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0)
     {
         perror("setsockopt");
+        close(file_descriptor);
         return -1;
     }
 
@@ -111,4 +113,37 @@ int nu_send_response(int file_descriptor, unsigned long connection_id)
         return -1;
 
     return nu_write_all(file_descriptor, body, (size_t)body_len);
+}
+
+// Retorna la longitud de la línea, 0 si el cliente cerró sin enviar nada,
+// -1 si hubo un error de lectura y -2 si la línea no cabe en el buffer.
+ssize_t nu_read_line(int file_descriptor, char *buffer, size_t size)
+{
+    size_t len = 0;
+
+    if (buffer == NULL || size < 2)
+        return -1;
+
+    while (1) {
+        char c;
+        ssize_t n = read(file_descriptor, &c, 1);
+
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+        if (n == 0)            
+            break;
+        if (c == '\n')
+            break;
+        if (len + 1 >= size)    
+            return -2;
+        buffer[len++] = c;
+    }
+
+    if (len > 0 && buffer[len - 1] == '\r')
+        len--;
+    buffer[len] = '\0';
+    return (ssize_t)len;
 }
