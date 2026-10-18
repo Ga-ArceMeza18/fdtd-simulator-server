@@ -60,7 +60,7 @@ static int parse_size(const char *text, size_t *out) {
 
 static uint64_t hash_bytes(const void *data, size_t size) {
     const unsigned char *p = data;
-    uint64_t h = 1469598103934665603ULL;
+    uint64_t h = 14695981039346656037ULL;
     size_t i;
 
     for (i = 0; i < size; i++) {
@@ -158,6 +158,7 @@ int main(int argc, char *argv[]) {
     run_s = t2 - t1;
     flush_s = t3 - t2;
     fdtd_profile_times(&fdtd, &barrier_mean, &barrier_max, &io);
+    
     compute_s = run_s - barrier_mean - io;
     if (compute_s < 0.0) {
         compute_s = 0.0;

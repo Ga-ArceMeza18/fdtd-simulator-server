@@ -1,0 +1,9 @@
+env=LAPTOP-7672QSQ0
+cores=4
+threads=1 2 4 8
+reps=5
+scenarios=E1 E2 E3
+big=2048
+small=256
+steps=1000
+date=2026-10-18 14:25:34

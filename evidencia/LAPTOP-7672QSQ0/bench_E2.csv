@@ -1,0 +1,1 @@
+env,scenario,rep,nx,ny,steps,threads,k,B,init_s,run_s,barrier_mean_s,barrier_max_s,io_push_s,compute_s,flush_s,total_s,sum_abs_ez,hash_ez
