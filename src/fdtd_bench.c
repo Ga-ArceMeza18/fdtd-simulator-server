@@ -15,9 +15,9 @@ int main(int argc, char *argv[]) {
     int ny = atoi(argv[2]);
     int pasos = atoi(argv[3]);
     int hilos = atoi(argv[4]);
-    double k = atof(argv[5]);
+    int k = atoi(argv[5]);
 
-    if (nx <= 0 || ny <= 0 || pasos <= 0 || hilos <= 0 || k <= 0.0) {
+    if (nx <= 0 || ny <= 0 || pasos <= 0 || hilos <= 0 || k < 0) {
         fprintf(stderr, "Todos los parámetros deben ser enteros positivos.\n");
         return EXIT_FAILURE;
     }
