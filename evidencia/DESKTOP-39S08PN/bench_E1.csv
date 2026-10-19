@@ -1,0 +1,2 @@
+env,scenario,rep,nx,ny,steps,threads,k,B,init_s,run_s,barrier_mean_s,barrier_max_s,io_push_s,compute_s,flush_s,total_s,sum_abs_ez,hash_ez
+DESKTOP-39S08PN,E1,1,2048,2048,1000,1,0,0,0.000074,19.588549,0.002306,0.002306,0.028665,19.557579,0.000000,19.588623,3.1124951568e+02,1a67ae77fb1cefc8
