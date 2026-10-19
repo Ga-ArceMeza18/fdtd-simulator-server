@@ -3,8 +3,7 @@
 int barrier_init(barrier_t *b, int num_threads) {
 
     if (b == NULL || num_threads <= 0) {
-        return -1; //Por ahora si hay algún error en la inicialización retornamos -1
-        //pero podriamos usar una biblioteca que retorne códigos de error especificos o dejarlo así
+        return -1; 
     }
 
     b->num_threads = num_threads;

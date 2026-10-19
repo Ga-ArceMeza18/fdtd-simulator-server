@@ -103,12 +103,12 @@ static void cmd_submit(Server *srv, int fd, int argc, char **argv) {
     int i;
 
     if (argc != 8) {
-        reply(fd, "ERROR uso: SUBMIT nx ny pasos hilos k sx sy");
+        reply(fd, "ERROR 501 uso: SUBMIT nx ny pasos hilos k sx sy");
         return;
     }
     for (i = 0; i < 7; i++) {
         if (parse_size(argv[i + 1], &v[i]) != 0) {
-            reply(fd, "ERROR parametro no numerico: %s", argv[i + 1]);
+            reply(fd, "ERROR 501 parametro no numerico: %s", argv[i + 1]);
             return;
         }
     }
@@ -122,15 +122,15 @@ static void cmd_submit(Server *srv, int fd, int argc, char **argv) {
     params.sy = v[6];
 
     if (params.nx > MAX_DIM || params.ny > MAX_DIM) {
-        reply(fd, "ERROR nx y ny deben ser <= %d", MAX_DIM);
+        reply(fd, "ERROR 501 nx y ny deben ser <= %d", MAX_DIM);
         return;
     }
     if (params.steps > MAX_STEPS) {
-        reply(fd, "ERROR pasos debe ser <= %lu", MAX_STEPS);
+        reply(fd, "ERROR 501 pasos debe ser <= %lu", MAX_STEPS);
         return;
     }
     if (params.threads > MAX_THREADS) {
-        reply(fd, "ERROR hilos debe ser <= %d", MAX_THREADS);
+        reply(fd, "ERROR 501 hilos debe ser <= %d", MAX_THREADS);
         return;
     }
 
@@ -142,14 +142,14 @@ static void cmd_submit(Server *srv, int fd, int argc, char **argv) {
         reply(fd, "BUSY");
         break;
     case BARBERSHOP_INVALID:
-        reply(fd, "ERROR parametros invalidos (nx,ny>=3; pasos>0; "
+        reply(fd, "ERROR 501 parametros invalidos (nx,ny>=3; pasos>0; "
             "1<=hilos<=nx-2; 0<=k<=pasos; 1<=sx<=nx-2; 1<=sy<=ny-2)");
         break;
     case BARBERSHOP_CLOSED:
-        reply(fd, "ERROR servidor cerrando");
+        reply(fd, "ERROR 421 servidor cerrando");
         break;
     default:
-        reply(fd, "ERROR interno");
+        reply(fd, "ERROR 451 error interno");
         break;
     }
 }
@@ -159,11 +159,11 @@ static void cmd_status(Server *srv, int fd, int argc, char **argv) {
     JobInfo info;
 
     if (argc != 2 || parse_size(argv[1], &id) != 0) {
-        reply(fd, "ERROR uso: STATUS id");
+        reply(fd, "ERROR 501 uso: STATUS id");
         return;
     }
     if (barbershop_query(srv->shop, id, &info) != 0) {
-        reply(fd, "ERROR id desconocido");
+        reply(fd, "ERROR 550 id desconocido");
         return;
     }
 
@@ -178,7 +178,7 @@ static void cmd_status(Server *srv, int fd, int argc, char **argv) {
         reply(fd, "DONE %.6f", info.seconds);
         break;
     default:
-        reply(fd, "ERROR trabajo fallido o cancelado");
+        reply(fd, "ERROR 550 trabajo fallido o cancelado");
         break;
     }
 }
@@ -189,14 +189,19 @@ static void cmd_peek(Server *srv, int fd, int argc, char **argv) {
     size_t j;
     size_t step;
     double ez;
+    JobInfo info;
 
     if (argc != 4 || parse_size(argv[1], &id) != 0
         || parse_size(argv[2], &i) != 0 || parse_size(argv[3], &j) != 0) {
-        reply(fd, "ERROR uso: PEEK id i j");
+        reply(fd, "ERROR 501 uso: PEEK id i j");
+        return;
+    }
+    if (barbershop_query(srv->shop, id, &info) != 0) {
+        reply(fd, "ERROR 550 id desconocido");
         return;
     }
     if (barbershop_peek(srv->shop, id, i, j, &step, &ez) != 0) {
-        reply(fd, "ERROR id o indices invalidos");
+        reply(fd, "ERROR 501 indices fuera de la malla (0<=i<nx, 0<=j<ny)");
         return;
     }
 
@@ -209,20 +214,20 @@ static void cmd_result(Server *srv, int fd, int argc, char **argv) {
     char path[512];
 
     if (argc != 2 || parse_size(argv[1], &id) != 0) {
-        reply(fd, "ERROR uso: RESULT id");
+        reply(fd, "ERROR 501 uso: RESULT id");
         return;
     }
     if (barbershop_query(srv->shop, id, &info) != 0) {
-        reply(fd, "ERROR id desconocido");
+        reply(fd, "ERROR 550 id desconocido");
         return;
     }
 
     if (info.state == JOB_QUEUED || info.state == JOB_RUNNING) {
-        reply(fd, "ERROR el trabajo no ha terminado");
+        reply(fd, "ERROR 450 el trabajo no ha terminado");
         return;
     }
     if (info.state == JOB_ERROR) {
-        reply(fd, "ERROR trabajo fallido o cancelado");
+        reply(fd, "ERROR 550 trabajo fallido o cancelado");
         return;
     }
 
@@ -280,14 +285,14 @@ static void process_line(Server *srv, int fd, char *line) {
     for (token = strtok_r(line, " \t", &save); token != NULL;
          token = strtok_r(NULL, " \t", &save)) {
         if (argc == MAX_TOKENS) {
-            reply(fd, "ERROR demasiados argumentos");
+            reply(fd, "ERROR 501 demasiados argumentos");
             return;
         }
         argv[argc++] = token;
     }
 
     if (argc == 0) {
-        reply(fd, "ERROR linea vacia");
+        reply(fd, "ERROR 500 linea vacia");
     } else if (strcmp(argv[0], "SUBMIT") == 0) {
         cmd_submit(srv, fd, argc, argv);
     } else if (strcmp(argv[0], "STATUS") == 0) {
@@ -298,13 +303,13 @@ static void process_line(Server *srv, int fd, char *line) {
         cmd_result(srv, fd, argc, argv);
     } else if (strcmp(argv[0], "SHUTDOWN") == 0) {
         if (argc != 1) {
-            reply(fd, "ERROR uso: SHUTDOWN");
+            reply(fd, "ERROR 501 uso: SHUTDOWN");
         } else {
             server_shutdown(srv);
             reply(fd, "BYE");
         }
     } else {
-        reply(fd, "ERROR comando desconocido");
+        reply(fd, "ERROR 500 comando desconocido");
     }
 }
 
@@ -318,7 +323,7 @@ static void *handler_thread(void *arg) {
 
     n = nu_read_line(conn->fd, line, sizeof(line));
     if (n == -2) {
-        reply(conn->fd, "ERROR linea demasiado larga");
+        reply(conn->fd, "ERROR 500 linea demasiado larga");
 
         // Quedan bytes sin leer. Si se cerrara ya, TCP enviaría un RST que
         // puede borrar la respuesta antes de que el cliente la lea. Se cierra
@@ -511,7 +516,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (spawn_handler(&srv, fd) != 0) {
-            reply(fd, "ERROR servidor sin recursos");
+            reply(fd, "ERROR 421 servidor sin recursos");
             close(fd);
         }
     }
