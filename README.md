@@ -97,10 +97,15 @@ Los errores siguen el formato `ERROR <código> <motivo>`, con códigos de respue
 
 Ejemplos:
 | `421` | El servidor está cerrando o no tiene recursos |
+
 | `450` | El trabajo todavía no termina; reintentar después |
+
 | `451` | Error interno al procesar la solicitud |
+
 | `500` | Línea vacía, demasiado larga o comando desconocido |
+
 | `501` | Argumentos o parámetros inválidos |
+
 | `550` | El trabajo no existe, falló o fue cancelado |
 
 ### Consultar el estado: `STATUS`
