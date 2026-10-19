@@ -4,6 +4,7 @@
 #include "fdtd_solver.h"
 #include "status.h"
 
+#include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdlib.h>
@@ -109,7 +110,11 @@ static void *barber_thread(void *arg) {
     Job *job;
 
     while (1) {
-        sem_wait(&shop->customers); // Espera a que haya un cliente si es 0 se duerme.
+        // Espera a que haya un cliente si es 0 se duerme.
+        // Si una señal interrumpe la espera entonces no llegó ningún cliente
+        // así que se vuelve a dormir.
+        while (sem_wait(&shop->customers) == -1 && errno == EINTR) {
+        }
 
         pthread_mutex_lock(&shop->mutex);
         if (shop->closing) { 

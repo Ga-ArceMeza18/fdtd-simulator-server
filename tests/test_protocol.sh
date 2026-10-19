@@ -114,46 +114,47 @@ fi
 
 # ===================================================================== 2
 echo "[2] Solicitudes mal formadas"
-bad() { # bad <descripción> <comando...>
-    local d=$1; shift
-    expect "$d" '^ERROR' "$(cl "$@")"
+# Los errores usan códigos FTP: "ERROR <código> <motivo>" (ver src/fdtd_server.c).
+bad() { # bad <descripción> <código> <comando...>
+    local d=$1 code=$2; shift 2
+    expect "$d -> $code" "^ERROR $code " "$(cl "$@")"
 }
-bad "línea vacía" ""
-bad "comando desconocido" FOO bar
-bad "minúsculas no son comandos" submit 1 2
-bad "SUBMIT sin argumentos" SUBMIT
-bad "SUBMIT con pocos argumentos" SUBMIT 1 2
-bad "SUBMIT con demasiados argumentos" SUBMIT 64 64 10 1 0 32 32 99
-bad "SUBMIT no numérico" SUBMIT a b c d e f g
-bad "SUBMIT negativo" SUBMIT -5 64 10 1 0 5 5
-bad "SUBMIT con signo +" SUBMIT +64 64 10 1 0 5 5
-bad "SUBMIT con decimal" SUBMIT 64.5 64 10 1 0 5 5
-bad "SUBMIT desbordado" SUBMIT 99999999999999999999 64 10 1 0 5 5
-bad "SUBMIT malla enorme" SUBMIT 100000 64 10 1 0 5 5
-bad "SUBMIT más hilos que nx-2" SUBMIT 64 64 10 63 0 32 32
-bad "SUBMIT 0 hilos" SUBMIT 64 64 10 0 0 32 32
-bad "SUBMIT fuente en el borde" SUBMIT 64 64 10 2 0 0 32
-bad "SUBMIT fuente fuera" SUBMIT 64 64 10 2 0 32 64
-bad "SUBMIT k > pasos" SUBMIT 64 64 10 2 99 32 32
-bad "SUBMIT 0 pasos" SUBMIT 64 64 0 2 0 32 32
-bad "SUBMIT malla 2x2" SUBMIT 2 2 10 1 0 1 1
-bad "STATUS sin id" STATUS
-bad "STATUS no numérico" STATUS abc
-bad "STATUS id inexistente" STATUS 999
-bad "STATUS id 0" STATUS 0
-bad "PEEK sin argumentos" PEEK 1
-bad "PEEK fuera de la malla" PEEK 1 99999 0
-bad "PEEK id inexistente" PEEK 999 0 0
-bad "RESULT id inexistente" RESULT 999
-bad "RESULT negativo" RESULT -1
-bad "SHUTDOWN con argumentos" SHUTDOWN ahora
-expect "línea demasiado larga" '^ERROR' "$(cl "$(printf 'A%.0s' $(seq 1 400))")"
+bad "línea vacía" 500 ""
+bad "comando desconocido" 500 FOO bar
+bad "minúsculas no son comandos" 500 submit 1 2
+bad "SUBMIT sin argumentos" 501 SUBMIT
+bad "SUBMIT con pocos argumentos" 501 SUBMIT 1 2
+bad "SUBMIT con demasiados argumentos" 501 SUBMIT 64 64 10 1 0 32 32 99
+bad "SUBMIT no numérico" 501 SUBMIT a b c d e f g
+bad "SUBMIT negativo" 501 SUBMIT -5 64 10 1 0 5 5
+bad "SUBMIT con signo +" 501 SUBMIT +64 64 10 1 0 5 5
+bad "SUBMIT con decimal" 501 SUBMIT 64.5 64 10 1 0 5 5
+bad "SUBMIT desbordado" 501 SUBMIT 99999999999999999999 64 10 1 0 5 5
+bad "SUBMIT malla enorme" 501 SUBMIT 100000 64 10 1 0 5 5
+bad "SUBMIT más hilos que nx-2" 501 SUBMIT 64 64 10 63 0 32 32
+bad "SUBMIT 0 hilos" 501 SUBMIT 64 64 10 0 0 32 32
+bad "SUBMIT fuente en el borde" 501 SUBMIT 64 64 10 2 0 0 32
+bad "SUBMIT fuente fuera" 501 SUBMIT 64 64 10 2 0 32 64
+bad "SUBMIT k > pasos" 501 SUBMIT 64 64 10 2 99 32 32
+bad "SUBMIT 0 pasos" 501 SUBMIT 64 64 0 2 0 32 32
+bad "SUBMIT malla 2x2" 501 SUBMIT 2 2 10 1 0 1 1
+bad "STATUS sin id" 501 STATUS
+bad "STATUS no numérico" 501 STATUS abc
+bad "STATUS id inexistente" 550 STATUS 999
+bad "STATUS id 0" 550 STATUS 0
+bad "PEEK sin argumentos" 501 PEEK 1
+bad "PEEK fuera de la malla" 501 PEEK 1 99999 0
+bad "PEEK id inexistente" 550 PEEK 999 0 0
+bad "RESULT id inexistente" 550 RESULT 999
+bad "RESULT negativo" 501 RESULT -1
+bad "SHUTDOWN con argumentos" 501 SHUTDOWN ahora
+expect "línea demasiado larga -> 500" '^ERROR 500 ' "$(cl "$(printf 'A%.0s' $(seq 1 400))")"
 
 # Bytes basura, cliente que conecta y se va, línea sin salto de línea
 exec 3<>/dev/tcp/127.0.0.1/"$PORT"
 printf '\x00\xff\xfe\x01 basura\n' >&3
 read -t 5 -r line <&3
-expect "bytes binarios" '^ERROR' "${line:-}"
+expect "bytes binarios -> 500" '^ERROR 500 ' "${line:-}"
 exec 3>&- 3<&-
 
 exec 3<>/dev/tcp/127.0.0.1/"$PORT"; exec 3>&- 3<&-            # conecta y cierra sin enviar
@@ -172,7 +173,7 @@ echo "[3] Cola llena: BUSY sin bloquear (C = 2 sillas)"
 out=$(cl SUBMIT 400 400 1500 1 0 200 200)
 expect "trabajo largo aceptado" '^OK 3$' "$out"
 wait_status 3 '^RUNNING [0-9]+/1500$' 20 && ok "STATUS RUNNING <paso>/<total>" || fail "no llegó a RUNNING"
-expect "RESULT de un trabajo en ejecución" '^ERROR' "$(cl RESULT 3)"
+expect "RESULT de un trabajo en ejecución -> 450" '^ERROR 450 ' "$(cl RESULT 3)"
 expect "PEEK sobre un trabajo en ejecución" '^VALUE [0-9]+ [-+0-9.e]+$' "$(cl PEEK 3 200 200)"
 expect "silla 1 ocupada" '^OK 4$' "$(cl SUBMIT 24 24 10 2 0 12 12)"
 expect "silla 2 ocupada" '^OK 5$' "$(cl SUBMIT 24 24 10 2 0 12 12)"
@@ -221,7 +222,7 @@ done
 files=$(ls "$SNAP" | grep -c '^job[0-9]*_step[0-9]*\.bin$')
 [ "$files" -eq $((oks * 5)) ] && ok "$files instantáneas en disco (5 por trabajo)" || fail "instantáneas" "$files != $((oks * 5))"
 [ "$(ls "$SNAP" | grep -c '\.tmp$')" -eq 0 ] && ok "no quedaron archivos .tmp" || fail "archivos .tmp residuales"
-expect "no existe un id extra" '^ERROR' "$(cl STATUS $((oks + 1)))"
+expect "no existe un id extra -> 550" '^ERROR 550 ' "$(cl STATUS $((oks + 1)))"
 cl SHUTDOWN >/dev/null
 wait "$SRV_PID" 2>/dev/null
 

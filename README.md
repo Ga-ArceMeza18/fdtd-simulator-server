@@ -91,6 +91,18 @@ Parámetros:
 
 Una respuesta `OK <id>` indica que el trabajo fue aceptado. `BUSY` indica que no pudo admitirse; `ERROR` indica parámetros inválidos u otro error.
 
+### Códigos de error
+
+Los errores siguen el formato `ERROR <código> <motivo>`, con códigos de respuesta de FTP. El primer dígito indica si conviene reintentar: `4xx` es un error temporal y `5xx` uno permanente.
+
+Ejemplos:
+| `421` | El servidor está cerrando o no tiene recursos |
+| `450` | El trabajo todavía no termina; reintentar después |
+| `451` | Error interno al procesar la solicitud |
+| `500` | Línea vacía, demasiado larga o comando desconocido |
+| `501` | Argumentos o parámetros inválidos |
+| `550` | El trabajo no existe, falló o fue cancelado |
+
 ### Consultar el estado: `STATUS`
 
 ```bash

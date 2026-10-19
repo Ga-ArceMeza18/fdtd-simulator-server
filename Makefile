@@ -64,8 +64,8 @@ $(BUILD_SB)/test_%: tests/test_%.c tests/test_util.h $(CORE_OBJ_SB) | $(BUILD_SB
 test_sinbarrera: $(BUILD_SB)/test_determinism
 	@echo "== determinismo con -DSIN_BARRERA (se espera que FALLE)"
 	@if $(BUILD_SB)/test_determinism; then \
-	@    echo "ERROR: sin barreras el test de determinismo NO fallo"; exit 1; \
-	@else echo "  OK: la carrera fue detectada por el test"; fi
+	   echo "ERROR: sin barreras el test de determinismo NO fallo"; exit 1; \
+	else echo "  OK: la carrera fue detectada por el test"; fi
 
 test: all $(TEST_BIN) test_sinbarrera
 	@set -e; for t in $(TEST_BIN); do echo "== $$t"; $$t; done
