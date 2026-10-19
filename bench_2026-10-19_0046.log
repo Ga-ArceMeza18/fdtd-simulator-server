@@ -1,0 +1,56 @@
+scripts/bench.sh: línea 71: scripts/env_info.sh: Permiso denegado
+Ambiente: Bryan-PC | núcleos: 2 | hilos: 1 2 4 | repeticiones: 5
+Resultados en: evidencia/Bryan-PC
+
+== E1: 2048x2048, 1000 pasos, k=0
+  [1/15] rep 1,  1 hilos: 26,000 s
+  [2/15] rep 1,  2 hilos: 16,000 s
+  [3/15] rep 1,  4 hilos: 17,000 s
+  [4/15] rep 2,  1 hilos: 26,000 s
+  [5/15] rep 2,  2 hilos: 17,000 s
+  [6/15] rep 2,  4 hilos: 17,000 s
+  [7/15] rep 3,  1 hilos: 26,000 s
+  [8/15] rep 3,  2 hilos: 16,000 s
+  [9/15] rep 3,  4 hilos: 16,000 s
+  [10/15] rep 4,  1 hilos: 27,000 s
+  [11/15] rep 4,  2 hilos: 16,000 s
+  [12/15] rep 4,  4 hilos: 16,000 s
+  [13/15] rep 5,  1 hilos: 26,000 s
+  [14/15] rep 5,  2 hilos: 16,000 s
+  [15/15] rep 5,  4 hilos: 16,000 s
+
+== E2: 2048x2048, 1000 pasos, k=10
+  [1/15] rep 1,  1 hilos: 46,000 s
+  [2/15] rep 1,  2 hilos: 21,000 s
+  [3/15] rep 1,  4 hilos: 21,000 s
+  [4/15] rep 2,  1 hilos: 31,000 s
+  [5/15] rep 2,  2 hilos: 22,000 s
+  [6/15] rep 2,  4 hilos: 22,000 s
+  [7/15] rep 3,  1 hilos: 32,000 s
+  [8/15] rep 3,  2 hilos: 24,000 s
+  [9/15] rep 3,  4 hilos: 22,000 s
+  [10/15] rep 4,  1 hilos: 31,000 s
+  [11/15] rep 4,  2 hilos: 22,000 s
+  [12/15] rep 4,  4 hilos: 21,000 s
+  [13/15] rep 5,  1 hilos: 31,000 s
+  [14/15] rep 5,  2 hilos: 25,000 s
+  [15/15] rep 5,  4 hilos: 27,000 s
+
+== E3: 256x256, 1000 pasos, k=0
+  [1/15] rep 1,  1 hilos: 0,000 s
+  [2/15] rep 1,  2 hilos: 0,000 s
+  [3/15] rep 1,  4 hilos: 0,000 s
+  [4/15] rep 2,  1 hilos: 0,000 s
+  [5/15] rep 2,  2 hilos: 0,000 s
+  [6/15] rep 2,  4 hilos: 0,000 s
+  [7/15] rep 3,  1 hilos: 0,000 s
+  [8/15] rep 3,  2 hilos: 0,000 s
+  [9/15] rep 3,  4 hilos: 0,000 s
+  [10/15] rep 4,  1 hilos: 0,000 s
+  [11/15] rep 4,  2 hilos: 0,000 s
+  [12/15] rep 4,  4 hilos: 0,000 s
+  [13/15] rep 5,  1 hilos: 0,000 s
+  [14/15] rep 5,  2 hilos: 0,000 s
+  [15/15] rep 5,  4 hilos: 0,000 s
+
+Listo. Para los gráficos: python3 scripts/plot_bench.py

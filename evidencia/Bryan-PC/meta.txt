@@ -1,0 +1,9 @@
+env=Bryan-PC
+cores=2
+threads=1 2 4
+reps=5
+scenarios=E1 E2 E3
+big=2048
+small=256
+steps=1000
+date=2026-10-19 00:46:45
